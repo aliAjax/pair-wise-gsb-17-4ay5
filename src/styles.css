@@ -18,7 +18,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -214,13 +215,315 @@ label {
   gap: 8px;
 }
 
-input {
+input,
+select {
   width: 100%;
   min-height: 42px;
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 0 12px;
   color: #172033;
+  background: #ffffff;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ---- 编录流程 ---- */
+
+.hole-flow {
+  display: grid;
+  gap: 20px;
+  align-content: start;
+}
+
+.hole-list {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.hole-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 8px;
+  align-items: center;
+  width: 100%;
+  padding: 12px;
+  text-align: left;
+  border-radius: 8px;
+  background: #fbfdff;
+}
+
+.hole-item.active {
+  border-color: var(--primary);
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+
+.hole-name {
+  font-weight: 700;
+}
+
+.hole-depth {
+  grid-column: 1 / -1;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.badge {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.badge-logging {
+  background: color-mix(in srgb, var(--warn) 12%, #ffffff);
+  color: var(--warn);
+}
+
+.badge-done {
+  background: color-mix(in srgb, var(--accent) 14%, #ffffff);
+  color: var(--accent);
+}
+
+.stack-form {
+  display: grid;
+  gap: 12px;
+}
+
+.hole-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  color: #526070;
+  font-size: 14px;
+  align-content: start;
+  justify-content: flex-end;
+}
+
+.issue-list {
+  margin: 0;
+  padding: 12px 14px 12px 32px;
+  border: 1px solid #f3c2cf;
+  border-left: 4px solid #e11d48;
+  background: #fff5f7;
+  color: #9f1239;
+  border-radius: 6px;
+  display: grid;
+  gap: 6px;
+  font-size: 14px;
+}
+
+.ready-box {
+  border: 1px solid #b7e4dd;
+  border-left: 4px solid var(--accent);
+  background: #f2fbfa;
+  color: #0f5952;
+  padding: 12px 14px;
+  border-radius: 6px;
+  line-height: 1.6;
+}
+
+.layer-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 4px;
+}
+
+.layer-table th,
+.layer-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 10px 8px;
+  text-align: left;
+  font-size: 14px;
+  vertical-align: middle;
+}
+
+.layer-table th {
+  color: #64748b;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.layer-table input {
+  min-height: 34px;
+  padding: 0 8px;
+}
+
+.tag-missing {
+  color: #b45309;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.tag-ok {
+  color: var(--accent);
+  font-size: 12px;
+}
+
+.tag-once {
+  color: #64748b;
+  font-size: 12px;
+  font-style: normal;
+}
+
+.row-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.row-actions button {
+  min-height: 32px;
+  padding: 0 10px;
+}
+
+.append-form {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.field-grid.five {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.field-grid.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.form-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.final-actions {
+  margin-top: 14px;
+}
+
+.water-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.water-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  background: #fbfdff;
+}
+
+.water-card h3 {
+  margin-bottom: 0;
+}
+
+.water-value strong {
+  display: block;
+  font-size: 24px;
+}
+
+.water-value span {
+  display: block;
+  margin: 4px 0;
+  color: #526070;
+  font-size: 13px;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.summary-grid > div {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  background: #fbfdff;
+}
+
+.summary-grid span {
+  display: block;
+  margin-bottom: 4px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.summary-grid strong {
+  font-size: 16px;
+}
+
+.correction-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.correction-card {
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--warn);
+  border-radius: 6px;
+  padding: 12px 14px;
+  background: #fbfdff;
+}
+
+.correction-card .corr-head {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.correction-card .corr-head strong {
+  color: #172033;
+}
+
+.correction-card p {
+  margin: 6px 0 0;
+  color: #526070;
+  font-size: 14px;
+}
+
+.empty-hint {
+  color: #64748b;
+  line-height: 1.6;
+}
+
+.panel h3 {
+  margin-top: 18px;
+}
+
+.section-heading + .summary-grid,
+.section-heading + .water-grid {
+  margin-top: 0;
+}
+
+@media (max-width: 860px) {
+  .hero,
+  .workspace,
+  .metrics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .field-grid,
+  .field-grid.five,
+  .field-grid.three,
+  .water-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hole-facts {
+    justify-content: flex-start;
+  }
 }
 
 .record-list {
@@ -258,16 +561,4 @@ input {
   margin-bottom: 0;
   color: #526070;
   line-height: 1.6;
-}
-
-@media (max-width: 860px) {
-  .hero,
-  .workspace,
-  .metrics-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .field-grid {
-    grid-template-columns: 1fr;
-  }
 }

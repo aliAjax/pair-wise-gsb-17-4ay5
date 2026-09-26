@@ -1,67 +1,13 @@
+import { useEffect, useMemo, useState } from "react";
 import "./styles.css";
-
-const project = {
-  "id": "hxwl-03",
-  "port": 5103,
-  "title": "岩土钻孔编录",
-  "subtitle": "钻孔分层、标贯与地下水位的现场记录面板",
-  "stack": "React + Vite + TypeScript + CSS",
-  "theme": [
-    "#92400e",
-    "#0f766e",
-    "#2563eb"
-  ],
-  "domain": "岩土工程",
-  "users": [
-    "岩土工程师",
-    "现场编录员",
-    "项目负责人"
-  ],
-  "metrics": [
-    "累计孔深",
-    "地层数量",
-    "最高标贯",
-    "地下水位"
-  ],
-  "filters": [
-    "黏土",
-    "粉砂",
-    "卵石",
-    "强风化"
-  ],
-  "fields": [
-    "钻孔编号",
-    "孔深",
-    "分层深度",
-    "岩性描述",
-    "土色",
-    "标贯击数",
-    "地下水位"
-  ],
-  "records": [
-    [
-      "ZK-18",
-      "22.6m",
-      "粉质黏土",
-      "中密",
-      "标贯12击，水位3.4m"
-    ],
-    [
-      "ZK-21",
-      "31.2m",
-      "卵石层",
-      "稍密",
-      "夹中粗砂，取样困难"
-    ],
-    [
-      "ZK-24",
-      "18.4m",
-      "强风化泥岩",
-      "硬塑",
-      "芯样完整率62%"
-    ]
-  ]
-};
+import type { Borehole, CorrectableField, Correction, FinalRecord, SoilLayer, WaterMark } from "./types";
+import { checkFinalReady, currentDepth } from "./rules";
+import { loadBoreholes, saveBoreholes } from "./storage";
+import { fmtM, uid } from "./utils";
+import { HoleList } from "./components/HoleList";
+import { LayerSection } from "./components/LayerSection";
+import { WaterSection } from "./components/WaterSection";
+import { FinalSection } from "./components/FinalSection";
 
 const statusColors = ["status-ok", "status-watch", "status-danger"];
 
@@ -76,85 +22,179 @@ function MetricCard({ label, value, index }: { label: string; value: string; ind
 }
 
 function App() {
-  const values = project.metrics.map((metric: string, index: number) => {
-    const base = [84, 12, 31, 7][index % 4];
-    return String(base + index * 3);
-  });
+  const [holes, setHoles] = useState<Borehole[]>(() => loadBoreholes());
+  const [selectedId, setSelectedId] = useState<string | null>(() => holes[0]?.id ?? null);
+
+  // 本机保存：任何变更即写入 localStorage
+  useEffect(() => {
+    saveBoreholes(holes);
+  }, [holes]);
+
+  const selected = holes.find((h) => h.id === selectedId) ?? holes[0] ?? null;
+
+  const updateHole = (id: string, updater: (h: Borehole) => Borehole) =>
+    setHoles((prev) => prev.map((h) => (h.id === id ? updater(h) : h)));
+
+  const createHole = (name: string, designDepth: number) => {
+    const hole: Borehole = {
+      id: uid(),
+      name,
+      designDepth,
+      status: "logging",
+      layers: [],
+      firstWater: null,
+      stableWater: null,
+      final: null,
+    };
+    setHoles((prev) => [...prev, hole]);
+    setSelectedId(hole.id);
+  };
+
+  const appendLayer = (holeId: string, layer: SoilLayer) =>
+    updateHole(holeId, (h) => (h.status === "logging" ? { ...h, layers: [...h.layers, layer] } : h));
+
+  const updateLayer = (holeId: string, layerId: string, patch: Partial<SoilLayer>) =>
+    updateHole(holeId, (h) =>
+      h.status === "logging"
+        ? { ...h, layers: h.layers.map((l) => (l.id === layerId ? { ...l, ...patch } : l)) }
+        : h
+    );
+
+  const removeLastLayer = (holeId: string) =>
+    updateHole(holeId, (h) => (h.status === "logging" ? { ...h, layers: h.layers.slice(0, -1) } : h));
+
+  // 初见、稳定水位各记一次：已存在则忽略
+  const recordFirst = (holeId: string, mark: WaterMark) =>
+    updateHole(holeId, (h) => (h.status === "logging" && !h.firstWater ? { ...h, firstWater: mark } : h));
+
+  const recordStable = (holeId: string, mark: WaterMark) =>
+    updateHole(holeId, (h) => (h.status === "logging" && !h.stableWater ? { ...h, stableWater: mark } : h));
+
+  const finalize = (holeId: string) =>
+    updateHole(holeId, (h) => {
+      if (h.status === "completed" || checkFinalReady(h).length > 0) return h;
+      const final: FinalRecord = {
+        submittedAt: new Date().toISOString(),
+        finalDepth: currentDepth(h),
+        layerCount: h.layers.length,
+        firstWater: h.firstWater,
+        stableWater: h.stableWater,
+        corrections: [],
+      };
+      return { ...h, status: "completed", final };
+    });
+
+  // 终孔纠正：原值、新值、原因写入同一条追溯记录，并同步当前生效值
+  const correct = (holeId: string, field: CorrectableField, newValue: number, reason: string) =>
+    updateHole(holeId, (h) => {
+      if (!h.final) return h;
+      const oldValue =
+        field === "finalDepth"
+          ? h.final.finalDepth
+          : field === "firstWaterDepth"
+            ? h.final.firstWater?.depth
+            : h.final.stableWater?.depth;
+      if (oldValue === undefined || oldValue === null) return h;
+      const correction: Correction = {
+        id: uid(),
+        correctedAt: new Date().toISOString(),
+        field,
+        oldValue,
+        newValue,
+        reason,
+      };
+      const final: FinalRecord = { ...h.final, corrections: [...h.final.corrections, correction] };
+      const next: Borehole = { ...h, final };
+      if (field === "finalDepth") {
+        final.finalDepth = newValue;
+      } else if (field === "firstWaterDepth" && final.firstWater) {
+        final.firstWater = { ...final.firstWater, depth: newValue };
+        if (next.firstWater) next.firstWater = { ...next.firstWater, depth: newValue };
+      } else if (field === "stableWaterDepth" && final.stableWater) {
+        final.stableWater = { ...final.stableWater, depth: newValue };
+        if (next.stableWater) next.stableWater = { ...next.stableWater, depth: newValue };
+      }
+      return next;
+    });
+
+  const metrics = useMemo(
+    () => [
+      { label: "在编钻孔", value: holes.filter((h) => h.status === "logging").length },
+      { label: "已终孔", value: holes.filter((h) => h.status === "completed").length },
+      { label: "累计分层", value: holes.reduce((n, h) => n + h.layers.length, 0) },
+      { label: "纠正追溯", value: holes.reduce((n, h) => n + (h.final?.corrections.length ?? 0), 0) },
+    ],
+    [holes]
+  );
 
   return (
     <main className="app-shell">
       <section className="hero">
         <div>
-          <p className="eyebrow">{project.id} · port {project.port}</p>
-          <h1>{project.title}</h1>
-          <p className="subtitle">{project.subtitle}</p>
+          <p className="eyebrow">hxwl-03 · 岩土工程</p>
+          <h1>岩土钻孔编录</h1>
+          <p className="subtitle">
+            按孔深顺序追加分层，重叠或留空当场拦截；初见与稳定水位各记一次；达到设计孔深且分层资料齐全方可提交终孔，纠正留痕可复查。
+          </p>
         </div>
         <div className="stack-card">
           <span>技术栈</span>
-          <strong>{project.stack}</strong>
+          <strong>React + Vite + TypeScript + CSS</strong>
+          <span>资料结构 / 规则判断 / 本机保存 / 页面 四层分离</span>
         </div>
       </section>
 
       <section className="metrics-grid">
-        {project.metrics.map((metric: string, index: number) => (
-          <MetricCard key={metric} label={metric} value={values[index]} index={index} />
+        {metrics.map((m, index) => (
+          <MetricCard key={m.label} label={m.label} value={String(m.value)} index={index} />
         ))}
       </section>
 
       <section className="workspace">
-        <aside className="panel narrow">
-          <h2>角色</h2>
-          <div className="chips">
-            {project.users.map((user: string) => (
-              <span key={user}>{user}</span>
-            ))}
-          </div>
-          <h2>筛选</h2>
-          <div className="chips muted">
-            {project.filters.map((filter: string) => (
-              <button key={filter}>{filter}</button>
-            ))}
-          </div>
-        </aside>
-
-        <section className="panel">
-          <div className="section-heading">
-            <div>
-              <p>{project.domain}</p>
-              <h2>记录字段</h2>
-            </div>
-            <button className="primary-action">新增记录</button>
-          </div>
-          <div className="field-grid">
-            {project.fields.map((field: string) => (
-              <label key={field}>
-                <span>{field}</span>
-                <input placeholder={"填写" + field} />
-              </label>
-            ))}
-          </div>
-        </section>
-      </section>
-
-      <section className="records panel">
-        <div className="section-heading">
-          <div>
-            <p>示例数据</p>
-            <h2>近期记录</h2>
-          </div>
-          <button>导出摘要</button>
-        </div>
-        <div className="record-list">
-          {project.records.map((record: string[], index: number) => (
-            <article key={record.join("-")} className="record-card">
-              <div className="record-index">{String(index + 1).padStart(2, "0")}</div>
-              <div>
-                <h3>{record[0]}</h3>
-                <p>{record.slice(1).join(" · ")}</p>
+        <HoleList holes={holes} selectedId={selected?.id ?? null} onSelect={setSelectedId} onCreate={createHole} />
+        {selected ? (
+          <div className="hole-flow">
+            <section className="panel">
+              <div className="section-heading">
+                <div>
+                  <p>钻孔编录单</p>
+                  <h2>
+                    {selected.name}{" "}
+                    <span className={`badge ${selected.status === "completed" ? "badge-done" : "badge-logging"}`}>
+                      {selected.status === "completed" ? "已终孔" : "编录中"}
+                    </span>
+                  </h2>
+                </div>
+                <div className="hole-facts">
+                  <span>设计孔深 {fmtM(selected.designDepth)} m</span>
+                  <span>累计孔深 {fmtM(currentDepth(selected))} m</span>
+                  <span>分层 {selected.layers.length} 层</span>
+                </div>
               </div>
-            </article>
-          ))}
-        </div>
+            </section>
+
+            <LayerSection
+              hole={selected}
+              onAppend={(layer) => appendLayer(selected.id, layer)}
+              onUpdateLayer={(layerId, patch) => updateLayer(selected.id, layerId, patch)}
+              onRemoveLast={() => removeLastLayer(selected.id)}
+            />
+            <WaterSection
+              hole={selected}
+              onRecordFirst={(mark) => recordFirst(selected.id, mark)}
+              onRecordStable={(mark) => recordStable(selected.id, mark)}
+            />
+            <FinalSection
+              hole={selected}
+              onFinalize={() => finalize(selected.id)}
+              onCorrect={(field, newValue, reason) => correct(selected.id, field, newValue, reason)}
+            />
+          </div>
+        ) : (
+          <section className="panel">
+            <p className="empty-hint">请先在左侧新增钻孔。</p>
+          </section>
+        )}
       </section>
     </main>
   );
